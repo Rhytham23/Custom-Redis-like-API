@@ -40,10 +40,10 @@ public class RedisServiceTest {
         when(keyValueRepository.findById(key)).thenReturn(Optional.of(entry));
 
         redisService.set(key,value, 0L);
-        KeyValueEntry retrieved = redisService.getEntry(key);
+        Map<String, Object> retrieved = redisService.getEntry(key);
 
         assertNotNull(retrieved);
-        assertEquals("Hello",retrieved.getValue());
+        assertEquals("Hello",retrieved.get("value"));
 
         verify(keyValueRepository).save(any());
         verify(keyValueRepository).findById(key);
@@ -77,16 +77,17 @@ public class RedisServiceTest {
     void testGetWithTTL_NotExpired() {
         String key = "ttlKey";
         String value = "someValue";
-        long futureTime = System.currentTimeMillis() + 10000; // 10 seconds ahead
+        long ttl = System.currentTimeMillis() + 10000; // 10 seconds ahead
 
-        KeyValueEntry entry = new KeyValueEntry(key, value, futureTime);
+        KeyValueEntry entry = new KeyValueEntry(key, value, ttl);
         when(keyValueRepository.findById(key)).thenReturn(Optional.of(entry));
 
-        KeyValueEntry result = redisService.getEntry(key);
+        Map<String,Object> result = redisService.getEntry(key);
 
         assertNotNull(result);
-        assertEquals(value, result.getValue());
-        assertEquals(futureTime, result.getExpiryTime());
+        assertEquals(value, result.get("value"));
+        long actualTTL = (long) result.get("ttl");
+        assertTrue(actualTTL <= 10 && actualTTL > 0);
     }
 
     @Test
@@ -134,10 +135,14 @@ public class RedisServiceTest {
 
         when(keyValueRepository.findAll()).thenReturn(mockList);
 
-        Map<String, KeyValueEntry> result = redisService.getAllEntries();
+        List<Map<String, Object>> result = redisService.getAllEntries();
+
+        List<String> keys = result.stream()
+                .map(map -> (String) map.get("key"))
+                .toList();
 
         assertEquals(1, result.size());
-        assertTrue(result.containsKey("key1"));
-        assertFalse(result.containsKey("key2"));
+        assertTrue(keys.contains("key1"));
+        assertFalse(keys.contains("key2"));
     }
 }
